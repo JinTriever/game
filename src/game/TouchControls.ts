@@ -13,6 +13,7 @@ export class TouchControls {
   private readonly root: HTMLElement;
   private readonly hint: HTMLElement | null;
   private readonly continueButton: HTMLElement | null;
+  private readonly motionButton: HTMLElement | null;
 
   private left = false;
   private right = false;
@@ -23,6 +24,7 @@ export class TouchControls {
   private jumpQueued = false;
   private startQueued = false;
   private continueQueued = false;
+  private motionToggleQueued = false;
 
   private enabled = false;
 
@@ -34,6 +36,7 @@ export class TouchControls {
     this.root = root;
     this.hint = document.getElementById('touch-hint');
     this.continueButton = document.getElementById('touch-continue');
+    this.motionButton = document.getElementById('touch-motion');
 
     this.bindHoldButton('touch-left', (down) => {
       this.left = down;
@@ -62,6 +65,9 @@ export class TouchControls {
     });
     this.bindTapButton('touch-continue', () => {
       this.continueQueued = true;
+    });
+    this.bindTapButton('touch-motion', () => {
+      this.motionToggleQueued = true;
     });
 
     // 앱 전환이나 탭 이동으로 pointerup을 못 받으면 버튼이 눌린 채로 남는다.
@@ -132,6 +138,21 @@ export class TouchControls {
     if (!this.continueQueued) return false;
     this.continueQueued = false;
     return true;
+  }
+
+  consumeMotionToggle(): boolean {
+    if (!this.motionToggleQueued) return false;
+    this.motionToggleQueued = false;
+    return true;
+  }
+
+  /** 연출 줄이기 버튼의 현재 상태를 문구로 반영한다. */
+  setMotionReduced(reduced: boolean): void {
+    if (!this.motionButton) return;
+    const label = reduced ? '연출 최소' : '연출 기본';
+    if (this.motionButton.textContent !== label) {
+      this.motionButton.textContent = label;
+    }
   }
 
   /** 버튼에서 손이 떠난 상태로 남는 것을 막는다(앱 전환 등). */

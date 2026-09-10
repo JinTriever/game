@@ -69,13 +69,22 @@ export const EFFECTS = {
   /**
    * 타격 시 화면을 정지시키는 시간(ms).
    * 격투 게임의 타격감은 이펙트보다 이 정지에서 나온다.
+   * 정지는 '움직임'이 아니라서 어지러움의 원인이 아니므로 여기에 힘을 준다.
    */
-  hitstopBaseMs: 40,
-  hitstopScaleMs: 80,
-  /** 화면 흔들림 상한. */
-  shakeMax: 22,
-  /** 흔들림 감쇠 속도(px/ms). */
-  shakeDecay: 0.045,
+  hitstopBaseMs: 45,
+  hitstopScaleMs: 85,
+
+  /**
+   * 화면 흔들림 상한(px).
+   * 라운드당 타격이 10회를 넘기 때문에 한 번의 강도가 조금만 커도
+   * 화면이 계속 떨리는 것처럼 느껴진다. 낮게 잡고 빠르게 가라앉힌다.
+   */
+  shakeMax: 11,
+  /** 흔들림 기본 강도 = base + 차지량 * scale */
+  shakeBase: 3,
+  shakeScale: 8,
+  /** 흔들림 감쇠 속도(px/ms). 값이 크면 빨리 멈춘다. */
+  shakeDecay: 0.075,
 } as const;
 
 /** 스테이지 팔레트에 들어가지 않는, 게임 전역 UI 색. */

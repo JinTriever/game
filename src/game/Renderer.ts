@@ -2,6 +2,8 @@ import type { BillboardManager } from '../ads/BillboardManager';
 import type { BillboardSlot } from '../ads/BillboardSlot';
 import { FIGHTER, MATCH, UI_COLORS, VIEW_HEIGHT, VIEW_WIDTH } from './constants';
 import type { Fighter, PlayerId } from './Fighter';
+import { MOTION_PROFILES } from './motion';
+import type { MotionProfile } from './motion';
 import { findPlatformBelow } from './stages';
 import type { PlatformDef, Stage } from './stages';
 
@@ -30,6 +32,8 @@ export interface RenderState {
   totalLevels: number;
   /** 모바일 조작이 켜져 있으면 키보드 안내를 감춘다. */
   touchEnabled: boolean;
+  /** 연출 줄이기가 켜져 있는지. 안내 문구에 표시한다. */
+  motionReduced: boolean;
   showAdMetrics: boolean;
 }
 
@@ -66,6 +70,11 @@ interface CrowdDot {
 
 const FONT = 'Inter, system-ui, -apple-system, sans-serif';
 
+/** 피격 플래시 지속 시간(ms). 짧게 스치듯 지나가야 눈이 편하다. */
+const FLASH_DURATION_MS = 90;
+/** 관중석 카메라 플래시 지속 시간(ms). */
+const CROWD_FLASH_MS = 150;
+
 export class Renderer {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
@@ -83,6 +92,9 @@ export class Renderer {
   private elapsedMs = 0;
   /** 이번 프레임의 실제 경과 시간. 프레임레이트 독립적인 연출 계산에 쓴다. */
   private lastDeltaMs = 16.667;
+
+  /** 연출 강도. 어지러움을 줄이기 위해 사용자가 낮출 수 있다. */
+  private motion: MotionProfile = MOTION_PROFILES.full;
 
   /** 눈 깜빡임 타이밍. 캐릭터가 살아있어 보이게 하는 값싼 장치. */
   private readonly blink: Record<PlayerId, { nextMs: number; untilMs: number }> = {
@@ -111,25 +123,37 @@ export class Renderer {
     this.vignette = null;
   }
 
+  setMotionProfile(profile: MotionProfile): void {
+    this.motion = profile;
+  }
+
   /** 타격 연출 일괄 처리. 파편 + 충격파 + 화면 플래시. */
   hitEffect(x: number, y: number, power: number, color: string, direction: number): void {
     this.burst(x, y, power, color);
-    this.shockwaves.push({
-      x,
-      y,
-      lifeMs: 0,
-      maxLifeMs: 260 + power * 160,
-      maxRadius: 60 + power * 140,
-      color,
-      direction,
-    });
-    this.flashPeak = Math.max(this.flashPeak, 0.1 + power * 0.22);
-    this.flashMs = 110;
+
+    if (this.motion.shockwave > 0) {
+      this.shockwaves.push({
+        x,
+        y,
+        lifeMs: 0,
+        maxLifeMs: 260 + power * 160,
+        maxRadius: (60 + power * 140) * this.motion.shockwave,
+        color,
+        direction,
+      });
+    }
+
+    // 전체 화면 플래시는 어지러움에 가장 크게 기여한다. 아주 얕게만 준다.
+    const peak = (0.03 + power * 0.09) * this.motion.flash;
+    if (peak > 0) {
+      this.flashPeak = Math.max(this.flashPeak, peak);
+      this.flashMs = FLASH_DURATION_MS;
+    }
   }
 
   /** 타격 지점에 파편을 뿌린다. */
   burst(x: number, y: number, power: number, color: string): void {
-    const count = Math.round(12 + power * 26);
+    const count = Math.round((12 + power * 26) * this.motion.particles);
     for (let i = 0; i < count; i += 1) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 1.5 + Math.random() * (3 + power * 8);
@@ -150,7 +174,7 @@ export class Renderer {
   /** 착지 먼지. */
   landingDust(x: number, y: number, impact: number): void {
     if (impact < 4) return;
-    const count = Math.round(Math.min(16, impact * 1.6));
+    const count = Math.round(Math.min(16, impact * 1.6) * this.motion.particles);
     for (let i = 0; i < count; i += 1) {
       const side = Math.random() < 0.5 ? -1 : 1;
       this.particles.push({
@@ -180,8 +204,11 @@ export class Renderer {
     this.drawBackdrop(state.stage);
 
     // 월드는 흔들리고 HUD는 고정된다.
-    const shakeX = state.shake > 0 ? (Math.random() * 2 - 1) * state.shake : 0;
-    const shakeY = state.shake > 0 ? (Math.random() * 2 - 1) * state.shake : 0;
+    // 매 프레임 완전 무작위로 튀면 지글거려서 더 어지럽다. 그래서 흔들림을
+    // 사인 곡선으로 만들어 방향이 이어지게 한다. 같은 강도에서도 훨씬 편하다.
+    const shakePhase = this.elapsedMs / 24;
+    const shakeX = state.shake > 0 ? Math.sin(shakePhase) * state.shake : 0;
+    const shakeY = state.shake > 0 ? Math.cos(shakePhase * 1.37) * state.shake * 0.6 : 0;
 
     ctx.save();
     ctx.translate(shakeX, shakeY);
@@ -269,7 +296,8 @@ export class Renderer {
 
     for (let i = 0; i < 4; i += 1) {
       const originX = 220 + i * 280;
-      const sway = Math.sin(this.elapsedMs / 3200 + i * 1.7) * 55;
+      // 배경이 계속 움직이면 시선이 분산되고 멀미가 생긴다. 폭을 좁게 잡는다.
+      const sway = Math.sin(this.elapsedMs / 5200 + i * 1.7) * 26 * this.motion.spotlightSway;
       const spread = 150;
       ctx.beginPath();
       ctx.moveTo(originX - 18, 0);
@@ -297,12 +325,13 @@ export class Renderer {
       ctx.fill();
     }
 
-    // 관중석 카메라 플래시. 정적인 배경을 살아있게 만드는 값싼 트릭.
+    // 관중석 카메라 플래시. 정적인 배경을 살아있게 만드는 값싼 트릭이지만
+    // 너무 자주 터지면 화면 전체가 지글거린다. 빈도와 밝기를 낮게 잡았다.
     for (const flash of this.crowdFlashes) {
-      const alpha = Math.max(0, flash.lifeMs / 130);
-      ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.9})`;
+      const alpha = Math.max(0, flash.lifeMs / CROWD_FLASH_MS);
+      ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.55})`;
       ctx.beginPath();
-      ctx.arc(flash.x, flash.y, 6.5, 0, Math.PI * 2);
+      ctx.arc(flash.x, flash.y, 6, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -598,7 +627,8 @@ export class Renderer {
     const velocity = fighter.body.velocity;
     const speed = Math.hypot(velocity.x, velocity.y);
     // 빠를수록 진행 방향으로 늘어난다. 물리적 정확함보다 읽히는 속도감이 중요하다.
-    const stretch = 1 + Math.min(0.34, speed * 0.013);
+    // 다만 과하면 캐릭터가 계속 일렁여서 눈이 피로해진다.
+    const stretch = 1 + Math.min(0.18, speed * 0.007) * this.motion.squash;
     const squash = 1 / stretch;
     const motionAngle = speed > 0.6 ? Math.atan2(velocity.y, velocity.x) : 0;
 
@@ -688,15 +718,22 @@ export class Renderer {
       ctx.fill();
     }
 
-    // 속도선
-    ctx.globalAlpha = 0.5;
+    if (!this.motion.speedLines) {
+      ctx.globalAlpha = 1;
+      return;
+    }
+
+    // 속도선.
+    // 길이를 매 프레임 무작위로 뽑으면 선이 지글거려서 어지러움의 큰 원인이 된다.
+    // 인덱스로 결정되는 고정 길이를 써서 형태가 안정되게 한다.
+    ctx.globalAlpha = 0.32;
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
-    for (let i = 0; i < 5; i += 1) {
-      const offset = (i - 2) * 12;
+    for (let i = 0; i < 4; i += 1) {
+      const offset = (i - 1.5) * 13;
       const perpX = -Math.sin(angle) * offset;
       const perpY = Math.cos(angle) * offset;
-      const length = 26 + Math.random() * 34;
+      const length = 28 + (i % 2) * 16;
       ctx.beginPath();
       ctx.moveTo(fighter.x + perpX - Math.cos(angle) * r, fighter.y + perpY - Math.sin(angle) * r);
       ctx.lineTo(
@@ -715,7 +752,7 @@ export class Renderer {
     // 생성 확률을 프레임 시간에 비례시킨다. 그러지 않으면 144Hz 화면에서
     // 입자가 2배 이상 쏟아져서 그림도 달라지고 부하도 커진다.
     const framesElapsed = this.lastDeltaMs / 16.667;
-    if (Math.random() < (0.55 + ratio * 0.45) * framesElapsed) {
+    if (Math.random() < (0.4 + ratio * 0.35) * framesElapsed * this.motion.particles) {
       const angle = Math.random() * Math.PI * 2;
       const distance = 70 + Math.random() * 60;
       const speed = 1.6 + ratio * 2.6;
@@ -847,6 +884,8 @@ export class Renderer {
     this.flashMs = Math.max(0, this.flashMs - dtMs);
     if (this.flashMs === 0) this.flashPeak = 0;
 
+    // 완충 시 게이지가 맥동하는 연출은 유지하되, 흔들림 위상은 여기서만 진행한다.
+
     // 눈 깜빡임
     for (const id of ['p1', 'p2'] as const) {
       const blink = this.blink[id];
@@ -866,11 +905,13 @@ export class Renderer {
       flash.lifeMs -= dtMs;
       if (flash.lifeMs <= 0) this.crowdFlashes.splice(i, 1);
     }
-    // 싸우는 중에는 플래시가 더 잦다.
-    const flashChance = state.phase === 'fight' ? 0.07 : 0.02;
+    // 싸우는 중에는 플래시가 조금 더 잦다.
+    // 초당 4회씩 터지면 화면이 지글거려서 눈이 피로해진다. 빈도를 크게 낮췄다.
+    const baseChance = state.phase === 'fight' ? 0.022 : 0.007;
+    const flashChance = baseChance * this.motion.crowdFlash * (dtMs / 16.667);
     if (this.crowd.length > 0 && Math.random() < flashChance) {
       const dot = this.crowd[Math.floor(Math.random() * this.crowd.length)];
-      if (dot) this.crowdFlashes.push({ x: dot.x, y: dot.y, lifeMs: 130 });
+      if (dot) this.crowdFlashes.push({ x: dot.x, y: dot.y, lifeMs: CROWD_FLASH_MS });
     }
   }
 
@@ -879,7 +920,7 @@ export class Renderer {
     for (const wave of this.shockwaves) {
       const progress = wave.lifeMs / wave.maxLifeMs;
       const radius = wave.maxRadius * easeOut(progress);
-      const alpha = (1 - progress) * 0.7;
+      const alpha = (1 - progress) * 0.45;
 
       ctx.save();
       ctx.translate(wave.x, wave.y);
@@ -936,9 +977,9 @@ export class Renderer {
   }
 
   private drawScreenFlash(): void {
-    if (this.flashMs <= 0) return;
+    if (this.flashMs <= 0 || this.flashPeak <= 0) return;
     const ctx = this.ctx;
-    ctx.fillStyle = `rgba(255, 255, 255, ${this.flashPeak * (this.flashMs / 110)})`;
+    ctx.fillStyle = `rgba(255, 255, 255, ${this.flashPeak * (this.flashMs / FLASH_DURATION_MS)})`;
     ctx.fillRect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
   }
 
@@ -985,9 +1026,9 @@ export class Renderer {
     // 중앙 배너
     if (state.phase === 'countdown') {
       const remainingSeconds = Math.ceil(state.countdownMs / 1000);
-      // 숫자가 바뀔 때마다 커졌다 작아진다.
+      // 숫자가 바뀔 때마다 살짝 커졌다 작아진다.
       const fraction = (state.countdownMs % 1000) / 1000;
-      const scale = 1 + (1 - fraction) * 0.22;
+      const scale = 1 + (1 - fraction) * 0.1 * this.motion.countdownPulse;
       ctx.save();
       ctx.translate(VIEW_WIDTH / 2, 250);
       ctx.scale(scale, scale);
@@ -1108,8 +1149,9 @@ export class Renderer {
     );
 
     const modeHint = state.mode === 'campaign' ? 'M 자유 대전으로' : 'M 캠페인으로   ·   C 맵 변경';
+    const motionHint = state.motionReduced ? 'V 연출 줄이기 켜짐' : 'V 연출 줄이기';
     ctx.fillText(
-      `Space 시작   ·   ${modeHint}   ·   I 광고 지표`,
+      `Space 시작   ·   ${modeHint}   ·   ${motionHint}   ·   I 광고 지표`,
       VIEW_WIDTH / 2,
       VIEW_HEIGHT - 18,
     );

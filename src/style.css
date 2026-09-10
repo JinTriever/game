@@ -132,6 +132,24 @@ body {
   touch-action: none;
 }
 
+/* 연출 강도 전환. 어지러움을 느낄 때 바로 찾을 수 있는 자리에 둔다. */
+.touch__motion {
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top));
+  right: max(10px, env(safe-area-inset-right));
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--touch-border);
+  background: var(--touch-bg);
+  backdrop-filter: blur(4px);
+  color: #93a1c4;
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-family: inherit;
+  pointer-events: auto;
+  touch-action: none;
+}
+
 .touch__continue {
   position: absolute;
   top: 50%;

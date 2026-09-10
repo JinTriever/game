@@ -26,6 +26,10 @@ export class AiController {
   /** 공중 복귀 대시를 위한 차지 홀드 누적. */
   private liftHoldMs = 0;
 
+  /** 발판 건너기 단계. 조주거리를 확보하는 중인지 달려가는 중인지. */
+  private crossStage: 'run-up' | 'back-up' = 'run-up';
+  private crossTimerMs = 0;
+
   constructor(stage: Stage, skill = 0.62) {
     this.stage = stage;
     this.skill = Math.min(1, Math.max(0, skill));
@@ -47,6 +51,8 @@ export class AiController {
     this.chargeTargetMs = 0;
     this.jumpCooldownMs = 0;
     this.liftHoldMs = 0;
+    this.crossStage = 'run-up';
+    this.crossTimerMs = 0;
   }
 
   update(dtMs: number, self: Fighter, opponent: Fighter): FighterIntent {
@@ -211,8 +217,12 @@ export class AiController {
   /**
    * 다른 발판으로 건너가기.
    *
-   * 발판 끝에 거의 붙어서, 충분한 속도로 달리는 중에만 뛴다.
-   * 일찍 뛰면 도달 거리가 모자라서 그대로 떨어진다.
+   * 도약 순간의 수평 속도가 도달 거리를 결정한다. 제자리에서 뛰면 못 건넌다.
+   *
+   * 여기서 조심할 함정이 하나 있다. '발판 끝'을 목표로 걸어가면 도착하는
+   * 순간 속도가 0이 되어, 정작 속도가 필요한 지점에서 속도가 사라진다.
+   * 그러면 도약 조건이 영원히 성립하지 않고 발판 끝에서 진동하며 갇힌다.
+   * 그래서 조주거리가 부족하면 먼저 뒤로 물러난 뒤 달려와서 뛴다.
    */
   private attemptCross(
     dtMs: number,
@@ -225,22 +235,52 @@ export class AiController {
 
     // 이미 공중이면 목표를 향해 계속 밀어준다.
     if (!self.grounded) {
+      this.crossStage = 'run-up';
+      this.crossTimerMs = 0;
       return this.steerToPlatform(dtMs, self, target);
     }
 
-    const edgeX = targetIsRight ? support.x + support.width : support.x;
-    const launchX = edgeX - direction * 16;
-    const atLaunchPoint = Math.abs(self.x - launchX) < 26;
-    // 도약 순간의 수평 속도가 도달 거리를 결정한다. 제자리에서 뛰면 못 건넌다.
-    const hasRunUp = direction > 0 ? self.body.velocity.x > 3 : self.body.velocity.x < -3;
+    this.crossTimerMs += dtMs;
 
-    if (atLaunchPoint && hasRunUp && this.jumpCooldownMs <= 0) {
+    const edgeX = targetIsRight ? support.x + support.width : support.x;
+    const oppositeEdgeX = targetIsRight ? support.x : support.x + support.width;
+    // 도약 방향 성분만 본다. 양수면 아직 발판 위, 음수면 이미 끝을 넘었다.
+    const distanceToEdge = (edgeX - self.x) * direction;
+    const approachSpeed = self.body.velocity.x * direction;
+    const roomBehind = Math.abs(self.x - oppositeEdgeX);
+
+    // 끝에 가까운데 속도가 없으면 조주거리를 확보해야 한다.
+    if (this.crossStage === 'run-up' && distanceToEdge < 70 && approachSpeed < 3) {
+      this.crossStage = 'back-up';
+    }
+
+    if (this.crossStage === 'back-up') {
+      const gotEnoughRoom = distanceToEdge >= RUN_UP_DISTANCE;
+      // 반대쪽 끝이 가까우면 더 물러날 수 없다. 있는 거리로 시도한다.
+      const outOfRoom = roomBehind < 55;
+      if (gotEnoughRoom || outOfRoom) {
+        this.crossStage = 'run-up';
+        this.crossTimerMs = 0;
+      } else {
+        return intent({ moveX: -direction });
+      }
+    }
+
+    // 발판 끝에 충분한 속도로 도달했으면 도약.
+    if (distanceToEdge <= 30 && approachSpeed > 3.2 && this.jumpCooldownMs <= 0) {
       this.jumpCooldownMs = 700;
+      this.crossStage = 'run-up';
+      this.crossTimerMs = 0;
       return intent({ moveX: direction, jump: true });
     }
 
-    // 도약 지점까지 달려간다.
-    return intent({ moveX: Math.sign(launchX - self.x) || direction });
+    // 오래 못 건너고 있으면 어딘가 막힌 것이다. 물러나서 처음부터 다시.
+    if (this.crossTimerMs > 2600) {
+      this.crossTimerMs = 0;
+      this.crossStage = 'back-up';
+    }
+
+    return intent({ moveX: direction });
   }
 
   /**
@@ -255,6 +295,12 @@ export class AiController {
     return Math.max(120, ideal + error);
   }
 }
+
+/**
+ * 발판 건너기 전에 확보하려는 조주거리(px).
+ * 최고 속도(5.2)까지 가속하는 데 필요한 거리보다 넉넉하게 잡는다.
+ */
+const RUN_UP_DISTANCE = 150;
 
 /** 의도 객체를 기본값으로 채워서 만든다. */
 function intent(partial: Partial<FighterIntent>): FighterIntent {

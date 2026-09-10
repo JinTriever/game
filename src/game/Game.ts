@@ -17,6 +17,8 @@ import {
   saveProgress,
 } from './levels';
 import type { Level, Progress } from './levels';
+import { getMotionProfile, loadMotionLevel, saveMotionLevel } from './motion';
+import type { MotionLevel } from './motion';
 import { Renderer } from './Renderer';
 import type { MatchPhase, RenderState } from './Renderer';
 import { detectRingOut, resolveTimeout } from './roundRules';
@@ -62,6 +64,8 @@ export class Game {
   private shake = 0;
   private hitstopMs = 0;
   private showAdMetrics = false;
+  /** 연출 강도. OS의 '동작 줄이기' 설정을 기본으로 따른다. */
+  private motionLevel: MotionLevel;
 
   private roundWinner: PlayerId | null = null;
   private roundEndReason: RoundEndReason = 'ringout';
@@ -100,7 +104,27 @@ export class Game {
     this.ads = ads;
     this.billboards = new BillboardManager(ads);
     this.ai = new AiController(firstStage, this.level?.aiSkill ?? 0.62);
+
+    this.motionLevel = loadMotionLevel();
+    this.renderer.setMotionProfile(getMotionProfile(this.motionLevel));
+    this.touch.setMotionReduced(this.motionLevel === 'reduced');
+
     this.buildArena();
+  }
+
+  /** 연출 강도 전환. 어지러움을 호소하는 경우를 위한 접근성 설정. */
+  private toggleMotionLevel(): void {
+    this.motionLevel = this.motionLevel === 'full' ? 'reduced' : 'full';
+    saveMotionLevel(this.motionLevel);
+    this.renderer.setMotionProfile(getMotionProfile(this.motionLevel));
+    this.touch.setMotionReduced(this.motionLevel === 'reduced');
+    // 이미 진행 중인 흔들림도 즉시 반영한다. 껐는데 계속 흔들리면 이상하다.
+    if (this.motionLevel === 'reduced') {
+      this.shake = 0;
+    }
+    this.setTransientMessage(
+      this.motionLevel === 'reduced' ? '연출 줄이기: 켜짐' : '연출 줄이기: 꺼짐',
+    );
   }
 
   async start(): Promise<void> {
@@ -171,8 +195,14 @@ export class Game {
   // ---------------------------------------------------------------- 루프
 
   private onHit(info: HitInfo): void {
-    this.shake = Math.min(EFFECTS.shakeMax, 6 + info.power * 16);
-    this.hitstopMs = EFFECTS.hitstopBaseMs + info.power * EFFECTS.hitstopScaleMs;
+    const motion = getMotionProfile(this.motionLevel);
+    const rawShake = Math.min(
+      EFFECTS.shakeMax,
+      EFFECTS.shakeBase + info.power * EFFECTS.shakeScale,
+    );
+    this.shake = rawShake * motion.shake;
+    this.hitstopMs =
+      (EFFECTS.hitstopBaseMs + info.power * EFFECTS.hitstopScaleMs) * motion.hitstop;
     const color = info.victim.id === 'p1' ? UI_COLORS.p1 : UI_COLORS.p2;
     this.renderer.hitEffect(info.x, info.y, info.power, color, info.direction);
   }
@@ -226,6 +256,10 @@ export class Game {
 
     if (this.input.wasPressed('KeyI')) {
       this.showAdMetrics = !this.showAdMetrics;
+    }
+
+    if (this.input.wasPressed('KeyV') || this.touch.consumeMotionToggle()) {
+      this.toggleMotionLevel();
     }
 
     // 맵 수동 변경은 자유 대전에서만. 캠페인은 레벨이 맵을 정한다.
@@ -654,6 +688,7 @@ export class Game {
       clearedUpTo: this.progress.clearedUpTo,
       totalLevels: LAST_LEVEL,
       touchEnabled: this.touch.isEnabled(),
+      motionReduced: this.motionLevel === 'reduced',
       showAdMetrics: this.showAdMetrics,
     };
   }

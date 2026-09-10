@@ -54,8 +54,13 @@
         <p id="touch-hint" class="touch__hint"></p>
       </div>
 
+      <!--
+        세로 화면 안내. 캔버스 아래 레터박스(검은 여백)에 놓아서
+        게임 화면을 가리지 않는다. 게임을 시작하면 사라진다.
+      -->
       <div id="rotate-hint" class="rotate-hint" aria-live="polite">
-        <p>화면을 옆으로 돌리면 더 편합니다</p>
+        <p class="rotate-hint__text">가로로 돌리면 화면이 커집니다</p>
+        <button id="rotate-lock" class="rotate-hint__btn" type="button">가로로 고정</button>
       </div>
 
       <div id="ad-overlay" class="ad-overlay" hidden role="dialog" aria-live="polite" aria-label="광고 재생">

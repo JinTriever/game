@@ -32,6 +32,12 @@ export type GameMode = 'campaign' | 'local2p';
 /** 떨어진 파이터를 고정할 y좌표. 링아웃 판정선보다 충분히 아래. */
 const PARK_Y = RINGOUT_Y + 400;
 
+/**
+ * 모바일 전투 조작 안내를 띄우는 최대 누적 시간(ms).
+ * 대시를 한 번 성공하면 이 시간과 무관하게 바로 접는다.
+ */
+const COMBAT_HINT_MS = 12_000;
+
 export class Game {
   private readonly renderer: Renderer;
   private readonly input: Input;
@@ -66,6 +72,11 @@ export class Game {
   private showAdMetrics = false;
   /** 연출 강도. OS의 '동작 줄이기' 설정을 기본으로 따른다. */
   private motionLevel: MotionLevel;
+
+  /** 전투 조작 안내를 띄운 누적 시간. 일정 시간이 지나면 접는다. */
+  private combatHintMs = 0;
+  /** 플레이어가 대시를 한 번이라도 성공했는지. 성공하면 안내를 접는다. */
+  private playerHasDashed = false;
 
   private roundWinner: PlayerId | null = null;
   private roundEndReason: RoundEndReason = 'ringout';
@@ -310,6 +321,9 @@ export class Game {
 
   /** Space 또는 모바일 시작 버튼. 페이즈에 따라 의미가 달라진다. */
   private handleAdvanceRequest(): void {
+    // 게임을 시작했다면 세로 화면 안내는 이미 읽힌 것이다. 계속 띄우지 않는다.
+    this.touch.dismissRotateHint();
+
     if (this.phase === 'title') {
       if (this.mode === 'campaign') {
         this.enterLevel(this.levelNumber);
@@ -437,6 +451,11 @@ export class Game {
       case 'fight': {
         this.fightBannerMs = Math.max(0, this.fightBannerMs - dtMs);
         this.roundTimeLeftMs = Math.max(0, this.roundTimeLeftMs - dtMs);
+        this.combatHintMs += dtMs;
+        // 대시를 성공했으면 조작을 익힌 것이므로 안내를 접는다.
+        if (this.p1.isDashing()) {
+          this.playerHasDashed = true;
+        }
         const p1Intent = this.readHumanIntent('p1', allowEdgeInput);
         const p2Intent =
           this.mode === 'local2p'
@@ -602,8 +621,10 @@ export class Game {
 
     this.touch.setContinueVisible(this.phase === 'matchEnd' && this.canOfferContinue());
 
-    // 문구를 빈 값으로 두면 라운드가 넘어갈 때마다 깜빡인다.
-    // 전투 중 안내는 countdown~roundEnd 구간에서 계속 유지한다.
+    // 전투 중 안내는 countdown~roundEnd 구간에서 유지한다. 중간에 빈 값으로
+    // 두면 라운드가 넘어갈 때마다 깜빡인다.
+    // 다만 영원히 띄워두면 화면을 가리므로, 대시를 익혔거나 일정 시간이 지나면
+    // 접는다. 이건 깜빡임이 아니라 의도된 종료다.
     switch (this.phase) {
       case 'title':
         this.touch.setHint('시작 버튼을 누르세요');
@@ -615,9 +636,13 @@ export class Game {
         break;
       case 'countdown':
       case 'fight':
-      case 'roundEnd':
-        this.touch.setHint('대시를 꾹 눌러 모았다가 떼세요 · 대시 중 점프를 누르면 위로');
+      case 'roundEnd': {
+        const stillLearning = !this.playerHasDashed && this.combatHintMs < COMBAT_HINT_MS;
+        this.touch.setHint(
+          stillLearning ? '대시를 꾹 눌러 모았다가 떼세요 · 대시 중 점프를 누르면 위로' : '',
+        );
         break;
+      }
     }
   }
 

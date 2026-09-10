@@ -185,30 +185,57 @@ body {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
 }
 
-/* 세로 화면일 때만 회전 안내를 띄운다. 플레이를 막지는 않는다. */
+/* 세로 화면 안내. 기본은 숨김이고 세로 터치 기기에서만 나타난다. */
 .rotate-hint {
   position: absolute;
-  top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
   display: none;
-  padding: 0.7rem 1.2rem;
-  border-radius: 12px;
-  background: rgba(6, 9, 18, 0.85);
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem 1.1rem;
+  border-radius: 14px;
+  background: rgba(6, 9, 18, 0.9);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: #cfd8f0;
   font-size: 0.85rem;
-  pointer-events: none;
+  text-align: center;
+  pointer-events: auto;
 }
 
-.rotate-hint p {
+.rotate-hint__text {
   margin: 0;
 }
 
+.rotate-hint__btn {
+  padding: 0.5rem 1.1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(120, 180, 255, 0.6);
+  background: rgba(79, 176, 255, 0.18);
+  color: #a8d2ff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  font-family: inherit;
+  touch-action: none;
+}
+
 @media (pointer: coarse) and (orientation: portrait) {
-  .rotate-hint {
-    display: block;
+  /*
+    캔버스는 16:9로 화면 중앙에 레터박스로 놓인다. 세로 화면에서는 위아래로
+    큰 검은 여백이 생기므로, 캔버스 아래쪽 여백에 안내를 배치해서
+    게임 화면을 절대 덮지 않게 한다.
+    (이전에는 화면 정중앙에 떠서 플레이를 가렸다.)
+  */
+  .rotate-hint:not(.is-dismissed) {
+    display: flex;
+    top: calc(50% + (100vw * 9 / 16) / 2 + 18px);
   }
+}
+
+/* 가로 고정을 지원하지 않는 기기에서는 버튼을 감춘다(주로 iOS). */
+.rotate-hint.no-lock .rotate-hint__btn {
+  display: none;
 }
 
 /* 화면이 낮으면 버튼을 조금 줄여서 게임 화면을 가리지 않게 한다. */

@@ -1,0 +1,76 @@
+:root {
+  color-scheme: dark;
+  --void: #07080d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--void);
+  overflow: hidden;
+  font-family: 'Inter', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+#app {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+}
+
+#stage {
+  /* 논리 해상도 1280x720을 유지하면서 뷰포트에 레터박스로 맞춘다. */
+  width: min(100vw, calc(100vh * 16 / 9));
+  height: min(100vh, calc(100vw * 9 / 16));
+  display: block;
+  touch-action: none;
+}
+
+.ad-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(4, 6, 12, 0.88);
+  backdrop-filter: blur(6px);
+}
+
+.ad-overlay[hidden] {
+  display: none;
+}
+
+.ad-overlay__panel {
+  text-align: center;
+  padding: 2.5rem 3.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 18px;
+  background: linear-gradient(160deg, #17203a, #0d1120);
+}
+
+.ad-overlay__label {
+  margin: 0 0 0.75rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.32em;
+  color: #7d8db3;
+}
+
+.ad-overlay__timer {
+  margin: 0;
+  font-size: 4.5rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #ffd166;
+  font-variant-numeric: tabular-nums;
+}
+
+.ad-overlay__hint {
+  margin: 1rem 0 0;
+  font-size: 0.9rem;
+  color: #93a1c4;
+}

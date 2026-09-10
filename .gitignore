@@ -1,0 +1,16 @@
+node_modules/
+dist/
+
+# 로컬 환경
+.env
+.env.local
+.DS_Store
+
+# 에디터
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# 로그
+*.log
+npm-debug.log*

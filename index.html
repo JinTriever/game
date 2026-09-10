@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>Ring Out Arena</title>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="stage" width="1280" height="720" aria-label="물리 격투 아레나 게임 화면"></canvas>
+      <div id="ad-overlay" class="ad-overlay" hidden role="dialog" aria-live="polite" aria-label="광고 재생">
+        <div class="ad-overlay__panel">
+          <p class="ad-overlay__label">REWARDED AD</p>
+          <p class="ad-overlay__timer" id="ad-timer">3</p>
+          <p class="ad-overlay__hint">광고 시청 후 보상이 지급됩니다</p>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

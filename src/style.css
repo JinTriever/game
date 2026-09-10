@@ -1,6 +1,8 @@
 :root {
   color-scheme: dark;
   --void: #07080d;
+  --touch-bg: rgba(20, 26, 44, 0.55);
+  --touch-border: rgba(255, 255, 255, 0.22);
 }
 
 * {
@@ -14,6 +16,11 @@ body {
   background: var(--void);
   overflow: hidden;
   font-family: 'Inter', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  /* 모바일에서 길게 눌러 텍스트가 선택되거나 확대되는 것을 막는다. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #app {
@@ -32,6 +39,181 @@ body {
   touch-action: none;
 }
 
+/* ------------------------------------------------------------- 모바일 조작 */
+
+.touch {
+  position: absolute;
+  inset: 0;
+  /* 컨테이너 자체는 클릭을 통과시키고, 버튼만 입력을 받는다. */
+  pointer-events: none;
+  touch-action: none;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+}
+
+.touch[hidden] {
+  display: none;
+}
+
+.touch__pad {
+  position: absolute;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  display: flex;
+  gap: 12px;
+  pointer-events: auto;
+}
+
+.touch__pad--left {
+  left: max(14px, env(safe-area-inset-left));
+}
+
+.touch__pad--right {
+  right: max(14px, env(safe-area-inset-right));
+}
+
+.touch__btn {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 2px solid var(--touch-border);
+  background: var(--touch-bg);
+  backdrop-filter: blur(4px);
+  color: #eef2ff;
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-family: inherit;
+  display: grid;
+  place-items: center;
+  touch-action: none;
+  transition: transform 0.06s ease, background 0.06s ease;
+}
+
+.touch__btn span {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.touch__btn.is-active {
+  transform: scale(0.92);
+  background: rgba(79, 176, 255, 0.42);
+}
+
+.touch__btn--jump {
+  border-color: rgba(120, 220, 160, 0.5);
+}
+
+.touch__btn--dash {
+  width: 88px;
+  height: 88px;
+  border-color: rgba(255, 209, 102, 0.6);
+  font-size: 1.15rem;
+}
+
+.touch__btn--dash.is-active {
+  background: rgba(255, 209, 102, 0.42);
+}
+
+/* 시작/다시하기는 화면 상단 중앙. 조작 버튼과 겹치지 않는 자리. */
+.touch__start {
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.5rem 1.1rem;
+  border-radius: 999px;
+  border: 1px solid var(--touch-border);
+  background: var(--touch-bg);
+  backdrop-filter: blur(4px);
+  color: #eef2ff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: inherit;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.touch__continue {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, 40px);
+  padding: 0.85rem 1.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 209, 102, 0.7);
+  background: rgba(255, 209, 102, 0.2);
+  backdrop-filter: blur(6px);
+  color: #ffd166;
+  font-size: 1rem;
+  font-weight: 700;
+  font-family: inherit;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.touch__continue[hidden] {
+  display: none;
+}
+
+.touch__hint {
+  position: absolute;
+  bottom: max(96px, calc(env(safe-area-inset-bottom) + 96px));
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 0 1rem;
+  text-align: center;
+  font-size: 0.78rem;
+  color: #93a1c4;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+/* 세로 화면일 때만 회전 안내를 띄운다. 플레이를 막지는 않는다. */
+.rotate-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: none;
+  padding: 0.7rem 1.2rem;
+  border-radius: 12px;
+  background: rgba(6, 9, 18, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #cfd8f0;
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+
+.rotate-hint p {
+  margin: 0;
+}
+
+@media (pointer: coarse) and (orientation: portrait) {
+  .rotate-hint {
+    display: block;
+  }
+}
+
+/* 화면이 낮으면 버튼을 조금 줄여서 게임 화면을 가리지 않게 한다. */
+@media (max-height: 420px) {
+  .touch__btn {
+    width: 58px;
+    height: 58px;
+    font-size: 0.9rem;
+  }
+
+  .touch__btn--dash {
+    width: 70px;
+    height: 70px;
+    font-size: 1rem;
+  }
+
+  .touch__hint {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------------------ 광고 */
+
 .ad-overlay {
   position: absolute;
   inset: 0;
@@ -39,6 +221,7 @@ body {
   place-items: center;
   background: rgba(4, 6, 12, 0.88);
   backdrop-filter: blur(6px);
+  z-index: 10;
 }
 
 .ad-overlay[hidden] {

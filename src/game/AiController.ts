@@ -13,8 +13,8 @@ import type { PlatformDef, Stage } from './stages';
  *  - 허공에 떴을 때 진행 방향을 유지하며 복귀할 것 (되돌아가면 공중에서 왕복한다)
  */
 export class AiController {
-  /** 0(허술함) ~ 1(빈틈 없음) */
-  private readonly skill: number;
+  /** 0(허술함) ~ 1(빈틈 없음). 레벨마다 바뀐다. */
+  private skill: number;
 
   private stage: Stage;
 
@@ -34,6 +34,11 @@ export class AiController {
   setStage(stage: Stage): void {
     this.stage = stage;
     this.reset();
+  }
+
+  /** 레벨이 바뀔 때 난이도를 갈아끼운다. */
+  setSkill(skill: number): void {
+    this.skill = Math.min(1, Math.max(0, skill));
   }
 
   reset(): void {

@@ -16,11 +16,20 @@ export interface RenderState {
   /** 라운드 제한 시간 잔량(ms). */
   roundTimeLeftMs: number;
   scores: Record<PlayerId, number>;
+  /** 이번 매치의 승리 조건. 레벨마다 다르므로 스코어 표시도 따라간다. */
+  roundsToWin: number;
   bannerTitle: string;
   bannerSubtitle: string;
   /** 화면 흔들림 강도(px). */
   shake: number;
-  mode: 'ai' | 'local2p';
+  mode: 'campaign' | 'local2p';
+  /** 캠페인 모드일 때의 현재 레벨. 자유 대전이면 null. */
+  levelNumber: number | null;
+  levelOpponent: string | null;
+  clearedUpTo: number;
+  totalLevels: number;
+  /** 모바일 조작이 켜져 있으면 키보드 안내를 감춘다. */
+  touchEnabled: boolean;
   showAdMetrics: boolean;
 }
 
@@ -938,8 +947,8 @@ export class Renderer {
   private drawHud(state: RenderState): void {
     const ctx = this.ctx;
 
-    this.drawScorePips('p1', state.scores.p1, 44, 'left');
-    this.drawScorePips('p2', state.scores.p2, VIEW_WIDTH - 44, 'right');
+    this.drawScorePips('p1', state.scores.p1, state.roundsToWin, 44, 'left');
+    this.drawScorePips('p2', state.scores.p2, state.roundsToWin, VIEW_WIDTH - 44, 'right');
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -958,10 +967,20 @@ export class Renderer {
       ctx.shadowBlur = 0;
     }
 
-    // 스테이지 이름
+    // 스테이지 / 레벨 정보
     ctx.fillStyle = state.stage.palette.accent;
     ctx.font = `700 12px ${FONT}`;
-    ctx.fillText(state.stage.name, VIEW_WIDTH / 2, 84);
+    const stageLabel =
+      state.levelNumber !== null
+        ? `STAGE ${state.levelNumber}/${state.totalLevels}  ·  ${state.stage.name}`
+        : state.stage.name;
+    ctx.fillText(stageLabel, VIEW_WIDTH / 2, 84);
+
+    if (state.levelOpponent && state.phase !== 'title') {
+      ctx.fillStyle = UI_COLORS.textDim;
+      ctx.font = `500 11px ${FONT}`;
+      ctx.fillText(`vs ${state.levelOpponent}`, VIEW_WIDTH / 2, 102);
+    }
 
     // 중앙 배너
     if (state.phase === 'countdown') {
@@ -1002,32 +1021,107 @@ export class Renderer {
         ctx.fillText(state.bannerSubtitle, VIEW_WIDTH / 2, 306);
       }
 
-      // 타이틀 화면에서는 맵 설명을 함께 보여준다.
+      // 타이틀 화면에서는 맵 설명과 캠페인 진행도를 함께 보여준다.
       if (state.phase === 'title') {
         ctx.fillStyle = state.stage.palette.accent;
         ctx.font = `600 17px ${FONT}`;
         ctx.fillText(`${state.stage.name} — ${state.stage.tagline}`, VIEW_WIDTH / 2, 344);
+
+        if (state.levelNumber !== null) {
+          this.drawLevelTrack(state, 386);
+        }
       }
     }
 
-    // 하단 조작 안내
+    this.drawControlHints(state);
+  }
+
+  /** 캠페인 진행도를 점으로 표시한다. 어디까지 왔는지 한눈에 보이게. */
+  private drawLevelTrack(state: RenderState, y: number): void {
+    const ctx = this.ctx;
+    const total = state.totalLevels;
+    const spacing = 34;
+    const startX = VIEW_WIDTH / 2 - ((total - 1) * spacing) / 2;
+
+    for (let i = 0; i < total; i += 1) {
+      const levelNumber = i + 1;
+      const x = startX + i * spacing;
+      const cleared = levelNumber <= state.clearedUpTo;
+      const current = levelNumber === state.levelNumber;
+
+      ctx.beginPath();
+      ctx.arc(x, y, current ? 12 : 9, 0, Math.PI * 2);
+      if (cleared) {
+        ctx.fillStyle = UI_COLORS.good;
+        ctx.fill();
+      } else if (current) {
+        ctx.fillStyle = state.stage.palette.accent;
+        ctx.shadowColor = state.stage.palette.accent;
+        ctx.shadowBlur = 16;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      } else {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = cleared || current ? '#0a0d18' : UI_COLORS.textDim;
+      ctx.font = `700 11px ${FONT}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(levelNumber), x, y + 0.5);
+    }
+
     ctx.fillStyle = UI_COLORS.textDim;
+    ctx.font = `500 13px ${FONT}`;
+    ctx.fillText(`클리어 ${state.clearedUpTo} / ${total}`, VIEW_WIDTH / 2, y + 30);
+  }
+
+  private drawControlHints(state: RenderState): void {
+    const ctx = this.ctx;
+    ctx.fillStyle = UI_COLORS.textDim;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // 모바일에서는 화면 버튼이 있으므로 키보드 안내를 띄우지 않는다.
+    // 어차피 화면 아래쪽은 조작 버튼이 덮는다.
+    if (state.touchEnabled) {
+      ctx.font = `500 13px ${FONT}`;
+      ctx.fillText(
+        state.mode === 'campaign' ? '캠페인' : '자유 대전',
+        VIEW_WIDTH / 2,
+        VIEW_HEIGHT - 20,
+      );
+      return;
+    }
+
     ctx.font = `500 14px ${FONT}`;
     const p2Hint =
-      state.mode === 'ai' ? 'AI 상대' : '2P ←/→ 이동, ↑ 점프, ↓ 꾹 눌러 대시(↑로 위 조준)';
+      state.mode === 'campaign'
+        ? 'AI 상대'
+        : '2P ←/→ 이동, ↑ 점프, ↓ 꾹 눌러 대시(↑로 위 조준)';
     ctx.fillText(
       `1P A/D 이동, W 점프(이동 중이면 대각), S 꾹 눌러 대시(W로 위 조준)   ·   ${p2Hint}`,
       VIEW_WIDTH / 2,
       VIEW_HEIGHT - 38,
     );
+
+    const modeHint = state.mode === 'campaign' ? 'M 자유 대전으로' : 'M 캠페인으로   ·   C 맵 변경';
     ctx.fillText(
-      'Space 시작   ·   M 모드 변경   ·   C 맵 변경   ·   I 광고 지표',
+      `Space 시작   ·   ${modeHint}   ·   I 광고 지표`,
       VIEW_WIDTH / 2,
       VIEW_HEIGHT - 18,
     );
   }
 
-  private drawScorePips(id: PlayerId, wins: number, x: number, align: 'left' | 'right'): void {
+  private drawScorePips(
+    id: PlayerId,
+    wins: number,
+    roundsToWin: number,
+    x: number,
+    align: 'left' | 'right',
+  ): void {
     const ctx = this.ctx;
     const color = id === 'p1' ? UI_COLORS.p1 : UI_COLORS.p2;
     const direction = align === 'left' ? 1 : -1;
@@ -1038,7 +1132,7 @@ export class Renderer {
     ctx.font = `800 18px ${FONT}`;
     ctx.fillText(id === 'p1' ? '1P' : '2P', x, 40);
 
-    for (let i = 0; i < MATCH.roundsToWin; i += 1) {
+    for (let i = 0; i < roundsToWin; i += 1) {
       const pipX = x + direction * (i * 26 + 6);
       ctx.beginPath();
       ctx.arc(pipX, 72, 9, 0, Math.PI * 2);

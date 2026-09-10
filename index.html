@@ -2,12 +2,53 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#07080d" />
+    <meta name="description" content="상대를 발판 밖으로 밀어내는 물리 격투 아레나 게임" />
     <title>Ring Out Arena</title>
   </head>
   <body>
     <div id="app">
       <canvas id="stage" width="1280" height="720" aria-label="물리 격투 아레나 게임 화면"></canvas>
+
+      <!-- 모바일 조작. 터치 기기에서만 노출된다. -->
+      <div id="touch-controls" class="touch" hidden>
+        <div class="touch__pad touch__pad--left">
+          <button id="touch-left" class="touch__btn" type="button" aria-label="왼쪽 이동">
+            <span aria-hidden="true">◀</span>
+          </button>
+          <button id="touch-right" class="touch__btn" type="button" aria-label="오른쪽 이동">
+            <span aria-hidden="true">▶</span>
+          </button>
+        </div>
+
+        <div class="touch__pad touch__pad--right">
+          <button id="touch-jump" class="touch__btn touch__btn--jump" type="button" aria-label="점프. 대시 중에는 위쪽 조준">
+            점프
+          </button>
+          <button id="touch-dash" class="touch__btn touch__btn--dash" type="button" aria-label="대시. 누르고 있다가 떼면 발사">
+            대시
+          </button>
+        </div>
+
+        <button id="touch-start" class="touch__start" type="button" aria-label="시작 또는 다시하기">
+          시작 / 다시하기
+        </button>
+
+        <button id="touch-continue" class="touch__continue" type="button" hidden aria-label="광고 보고 이어하기">
+          ▶ 광고 보고 이어하기
+        </button>
+
+        <p id="touch-hint" class="touch__hint"></p>
+      </div>
+
+      <div id="rotate-hint" class="rotate-hint" aria-live="polite">
+        <p>화면을 옆으로 돌리면 더 편합니다</p>
+      </div>
+
       <div id="ad-overlay" class="ad-overlay" hidden role="dialog" aria-live="polite" aria-label="광고 재생">
         <div class="ad-overlay__panel">
           <p class="ad-overlay__label">REWARDED AD</p>

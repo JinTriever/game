@@ -243,6 +243,10 @@ export const STAGES: readonly Stage[] = [
   },
 ];
 
+export function getStageById(id: string): Stage | null {
+  return STAGES.find((stage) => stage.id === id) ?? null;
+}
+
 /** 스테이지 좌우 끝. AI의 낙하 회피 판단에 쓴다. */
 export function getStageExtent(stage: Stage): { left: number; right: number } {
   let left = Number.POSITIVE_INFINITY;

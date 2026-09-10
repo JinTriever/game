@@ -35,11 +35,12 @@ jobs:
       - name: 빌드
         run: npm run build
 
-      # enablement: true면 레포 설정에서 Pages를 미리 켜두지 않아도
-      # 워크플로가 자동으로 활성화한다(수동 설정 단계를 없애기 위함).
+      # enablement 옵션은 쓰지 않는다. 워크플로의 기본 GITHUB_TOKEN에는
+      # Pages 사이트를 '생성'할 권한이 없어서 실패한다
+      # (Resource not accessible by integration).
+      # 최초 활성화는 레포 소유자 권한으로 한 번만 해두면 되고,
+      # 그 뒤로는 이 단계가 기존 설정을 읽어오는 역할만 한다.
       - uses: actions/configure-pages@v6
-        with:
-          enablement: true
 
       - uses: actions/upload-pages-artifact@v5
         with:
